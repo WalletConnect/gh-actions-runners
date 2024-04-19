@@ -1,0 +1,77 @@
+name: Run ECS Fargate Github Action Runner task(s)
+
+on:
+  workflow_call:
+    inputs:
+      cpu:
+        description: 'Amount of CPU units to allocate to a single task'
+        type: string
+        required: true
+        default: '512'
+      memory:
+        description: 'Amount of memory (MB) to allocate to a single task'
+        type: string
+        default: '1024'
+      labels:
+        description: 'Coma-separated list of labels to assign to the tasks'
+        type: string
+        required: true
+        default: ''
+      count:
+        description: 'Number of tasks to run'
+        type: string
+        required: true
+        default: '1'
+    secrets:
+      TF_API_TOKEN:
+        required: true
+
+jobs:
+  run-task:
+    name: Run ECS task
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate runner token
+        uses: actions/github-script@v7
+        id: gen-token
+        with:
+          result-encoding: string
+          script: |
+            const response = await github.request('POST /repos/{owner}/{repo}/actions/runners/registration-token', {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            return response.data.token;  
+
+      - name: Checkout WalletConnect/gh-actions-runners
+        uses: actions/checkout@v4
+        with:
+          repository: WalletConnect/gh-actions-runners
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Cache Terraform data
+        uses: actions/cache@v4
+        with:
+          path: .terraform
+          key: terraform-${{ hashFiles('.terraform.lock.hcl') }}
+
+      - name: Init Terraform
+        run: terraform init -no-color
+
+      - name: Configure Terraform Variables
+        shell: bash
+        run: |
+          echo "run_task=true" >> .auto.tfvars
+          echo "cpu=${{ inputs.cpu }}" >> .auto.tfvars
+          echo "memory=${{ inputs.memory }}" >> .auto.tfvars
+          echo "runner_token=${{ steps.gen-token.outputs.result }}" >> .auto.tfvars
+          echo "repo_url=https://github.com/${{ github.repository }}" >> .auto.tfvars
+          echo "labels=${{ inputs.labels }}" >> .auto.tfvars
+          echo "desired_count=${{ inputs.count }}" >> .auto.tfvars
+
+      - name: Run task
+        run: terraform plan -target=module.run_task -no-color
