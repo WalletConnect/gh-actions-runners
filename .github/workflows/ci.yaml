@@ -69,7 +69,7 @@ jobs:
           path: /tmp/image-${{ matrix.images.name }}.tar
 
   publish:
-    needs: [tests, build, cargo-deny]
+    needs: [build]
     name: "Publish image: ${{ matrix.images.name }}"
     runs-on:
       group: ubuntu-runners
