@@ -122,6 +122,10 @@ resource "aws_route_table_association" "private" {
 
 # ECS
 
+resource "aws_ecr_repository" "foo" {
+  name = "github-actions-runner"
+}
+
 data "aws_iam_policy_document" "assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
