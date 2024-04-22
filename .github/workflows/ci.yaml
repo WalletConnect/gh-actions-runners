@@ -4,6 +4,8 @@ on:
     branches: ["main"]
     paths:
       - "Dockerfile"
+  workflow_dispatch:
+
 concurrency:
   # Support push/pr as event types with different behaviors each:
   # 1. push: queue up builds
@@ -11,8 +13,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}${{ github.event.pull_request.number }}
   # If there is already a workflow running for the same pull request, cancel it
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   AWS_REGION: "eu-central-1"
+
 jobs:
   build:
     name: "Build image: ${{ matrix.images.name }}"
