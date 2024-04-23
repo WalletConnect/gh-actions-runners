@@ -23,7 +23,7 @@ variable "desired_count" {
 }
 
 data "aws_ecs_cluster" "this" {
-  cluster_name = "github-actions-runners"
+  cluster_name = "github-actions-runner"
 }
 
 data "aws_subnet" "this" {
