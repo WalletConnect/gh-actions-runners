@@ -31,6 +31,9 @@ jobs:
   setup-runners:
     runs-on: ubuntu-latest
     steps:
+      - name: Mask secrets
+        run: |
+          echo ::add-mask::${{ steps.gen-token.outputs.result }}         
       - name: Generate runner token
         uses: actions/github-script@v7
         id: gen-token
@@ -65,8 +68,6 @@ jobs:
 
       - name: Configure Terraform Variables
         run: |
-          echo ::add-mask::${{ steps.gen-token.outputs.result }}         
-
           echo 'run_task=true' >> .auto.tfvars
           echo 'cpu=${{ inputs.cpu }}' >> .auto.tfvars
           echo 'memory=${{ inputs.memory }}' >> .auto.tfvars
