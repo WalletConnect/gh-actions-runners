@@ -65,13 +65,12 @@ jobs:
 
       - name: Configure Terraform Variables
         run: |
-          RUNNER_TOKEN=${{ steps.gen-token.outputs.result }}
-          echo "::add-mask::$RUNNER_TOKEN" 
-        
+          echo ::add-mask::${{ steps.gen-token.outputs.result }}         
+
           echo 'run_task=true' >> .auto.tfvars
           echo 'cpu=${{ inputs.cpu }}' >> .auto.tfvars
           echo 'memory=${{ inputs.memory }}' >> .auto.tfvars
-          echo 'runner_token="$RUNNER_TOKEN"' >> .auto.tfvars
+          echo 'runner_token="${{ steps.gen-token.outputs.result }}"' >> .auto.tfvars
           echo 'repo_url="https://github.com/${{ github.repository }}"' >> .auto.tfvars
           echo 'labels="${{ inputs.labels }}"' >> .auto.tfvars
           echo 'desired_count=${{ inputs.count }}' >> .auto.tfvars
