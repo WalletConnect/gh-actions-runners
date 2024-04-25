@@ -22,6 +22,10 @@ variable "desired_count" {
   type = number
 }
 
+variable "timeout" {
+  type    = string
+}
+
 data "aws_ecs_cluster" "this" {
   cluster_name = "github-actions-runner"
 }
@@ -75,6 +79,10 @@ data "aws_ecs_task_execution" "this" {
       environment {
         key   = "START_DOCKER_SERVICE"
         value = true
+      }
+      environment {
+        key   = "TIMEOUT"
+        value = var.timeout
       }
     }
   }

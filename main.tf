@@ -61,6 +61,11 @@ variable "desired_count" {
   default = null
 }
 
+variable "timeout" {
+  type    = string
+  default = null
+}
+
 locals {
   availability_zone = "eu-central-1a"
 }
@@ -121,13 +126,14 @@ module "runner" {
   cache_url         = module.cache-server.url
 }
 
-module "run_task" {
+module "setup-runners" {
   count         = var.run_task ? 1 : 0
-  source        = "./run_task"
+  source        = "./setup-runners"
   cpu           = var.cpu
   memory        = var.memory
   runner_token  = var.runner_token
   repo_url      = var.repo_url
   labels        = var.labels
   desired_count = var.desired_count
+  timeout = var.timeout
 }

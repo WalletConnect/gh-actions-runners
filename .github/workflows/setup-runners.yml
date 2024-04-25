@@ -1,12 +1,9 @@
-name: Run ECS Fargate Github Action Runner task(s)
-
 on:
   workflow_call:
     inputs:
       cpu:
         description: 'Amount of CPU units to allocate to a single task'
         type: string
-        required: true
         default: '512'
       memory:
         description: 'Amount of memory (MB) to allocate to a single task'
@@ -15,13 +12,15 @@ on:
       labels:
         description: 'Coma-separated list of labels to assign to the tasks'
         type: string
-        required: true
         default: ''
       count:
         description: 'Number of tasks to run'
         type: string
-        required: true
         default: '1'
+      timeout:
+        description: 'Runner timeout'
+        type: string
+        default: '30m'
     secrets:
       TF_API_TOKEN:
         required: true
@@ -29,8 +28,7 @@ on:
         required: true
 
 jobs:
-  run-task:
-    name: Run ECS task
+  setup-runners:
     runs-on: ubuntu-latest
     steps:
       - name: Generate runner token
@@ -71,7 +69,7 @@ jobs:
           echo 'run_task=true' >> .auto.tfvars
           echo 'cpu=${{ inputs.cpu }}' >> .auto.tfvars
           echo 'memory=${{ inputs.memory }}' >> .auto.tfvars
-          echo 'runner_token="${{ steps.gen-token.outputs.result }}"' >> .auto.tfvars
+          echo 'runner_token="::add-mask::${{ steps.gen-token.outputs.result }}"' >> .auto.tfvars
           echo 'repo_url="https://github.com/${{ github.repository }}"' >> .auto.tfvars
           echo 'labels="${{ inputs.labels }}"' >> .auto.tfvars
           echo 'desired_count=${{ inputs.count }}' >> .auto.tfvars
