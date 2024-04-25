@@ -255,6 +255,22 @@ resource "aws_s3_bucket_policy" "this" {
 EOF
 }
 
+
+resource "aws_s3_bucket_lifecycle_configuration" "example" {
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    id = "main"
+
+    filter {}
+    expiration {
+      days = 7
+    }
+
+    status = "Enabled"
+  }
+}
+
 output "url" {
   value = "${local.base_url}/${local.access_token}/"
 }
