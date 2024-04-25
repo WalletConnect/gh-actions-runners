@@ -29,7 +29,6 @@ on:
 
 jobs:
   setup-runners:
-    needs: gen-runner-token
     runs-on: ubuntu-latest
     steps:
       - name: Generate runner token
