@@ -13,11 +13,14 @@ variable "nat_gateway_id" {
 locals {
   name = "github-actions-cache-server"
 
-  hostnum = 4
-  ip      = "10.0.3.${local.hostnum}"
+  hostnum     = 4
+  efs_hostnum = 5
+
+  ip     = "10.0.3.${local.hostnum}"
+  efs_ip = "10.0.3.${local.efs_hostnum}"
 
   aws_reserved_hostnums = [0, 1, 2, 3, 15] # for '/28' cidr
-  hostnums_to_reserve   = sort(tolist(setsubtract(range(16), concat(local.aws_reserved_hostnums, [local.hostnum]))))
+  hostnums_to_reserve   = sort(tolist(setsubtract(range(16), concat(local.aws_reserved_hostnums, [local.hostnum, local.efs_hostnum]))))
 
   port         = 3000
   access_token = "cache"
@@ -134,11 +137,29 @@ resource "aws_ecs_task_definition" "this" {
         awslogs-stream-prefix = "ecs"
       }
     }
+
+    mountPoints = [{
+      containerPath = "/data"
+      sourceVolume  = "efs"
+    }]
   }])
 
   cpu                = 1024
   memory             = 2048
   execution_role_arn = aws_iam_role.this.arn
+
+
+  volume {
+    name = "efs"
+    efs_volume_configuration {
+      file_system_id     = aws_efs_file_system.this.id
+      transit_encryption = "ENABLED" # required in order to use an access point
+
+      authorization_config {
+        access_point_id = aws_efs_access_point.this.id
+      }
+    }
+  }
 
   runtime_platform {
     operating_system_family = "LINUX"
@@ -157,6 +178,44 @@ resource "aws_ecs_service" "this" {
 
   network_configuration {
     subnets = [aws_subnet.this.id]
+  }
+}
+
+resource "aws_efs_file_system" "this" {
+  throughput_mode = "bursting"
+
+  tags = {
+    Name = local.name
+  }
+}
+
+resource "aws_security_group" "efs_mount_point" {
+  name   = "${local.name}-efs-mount-point"
+  vpc_id = var.vpc_id
+
+  # 2049 port is required by EFS
+  ingress {
+    from_port   = 2049
+    to_port     = 2049
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+}
+
+resource "aws_efs_mount_target" "this" {
+  file_system_id  = aws_efs_file_system.this.id
+  subnet_id       = aws_subnet.this.id
+  ip_address      = local.efs_ip
+  security_groups = [aws_security_group.efs_mount_point.id]
+}
+
+resource "aws_efs_access_point" "this" {
+  file_system_id = aws_efs_file_system.this.id
+
+  # All filesystem calls is going to be accessed through this user.
+  posix_user {
+    gid = 0
+    uid = 0
   }
 }
 

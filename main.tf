@@ -67,6 +67,9 @@ locals {
 
 resource "aws_vpc" "this" {
   cidr_block = "10.0.0.0/16"
+
+  # Required for EFS
+  enable_dns_hostnames = true
 }
 
 resource "aws_subnet" "public" {
