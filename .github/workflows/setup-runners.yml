@@ -64,7 +64,6 @@ jobs:
         run: terraform init -no-color
 
       - name: Configure Terraform Variables
-        shell: bash
         run: |
           RUNNER_TOKEN=${{ steps.gen-token.outputs.result }}
           echo "::add-mask::$RUNNER_TOKEN" 
