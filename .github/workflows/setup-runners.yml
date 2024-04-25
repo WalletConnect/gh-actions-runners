@@ -38,12 +38,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_PAT }}
           result-encoding: string
           script: |
-            const token = await github.request('POST /repos/{owner}/{repo}/actions/runners/registration-token', {
+            const response = await github.request('POST /repos/{owner}/{repo}/actions/runners/registration-token', {
               owner: context.repo.owner,
               repo: context.repo.repo,
-            }).data.token;            
-            core.setSecret(token);
-            return token;   
+            });
+            core.setSecret(response.data.token);
+            return response.data.token;   
 
       - name: Checkout WalletConnect/gh-actions-runners
         uses: actions/checkout@v4
