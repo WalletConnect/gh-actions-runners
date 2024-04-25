@@ -20,8 +20,7 @@ env:
 jobs:
   build:
     name: "Build image: ${{ matrix.images.name }}"
-    runs-on:
-      group: ubuntu-runners
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
