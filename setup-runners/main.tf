@@ -23,7 +23,7 @@ variable "desired_count" {
 }
 
 variable "timeout" {
-  type    = string
+  type = string
 }
 
 data "aws_ecs_cluster" "this" {

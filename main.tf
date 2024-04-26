@@ -135,5 +135,5 @@ module "setup-runners" {
   repo_url      = var.repo_url
   labels        = var.labels
   desired_count = var.desired_count
-  timeout = var.timeout
+  timeout       = var.timeout
 }
