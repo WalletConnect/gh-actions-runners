@@ -101,6 +101,7 @@ resource "aws_ecs_task_definition" "this" {
 
     environment = [
       { name = "ACTIONS_CACHE_URL", value = var.cache_url },
+      { name = "DISABLE_AUTO_UPDATE", value = "1" },
     ]
 
     logConfiguration = {
