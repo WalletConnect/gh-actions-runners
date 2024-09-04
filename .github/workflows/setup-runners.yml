@@ -21,10 +21,11 @@ on:
         description: 'Runner timeout'
         type: string
         default: '30m'
-    secrets:
       TF_API_TOKEN:
+        type: string
         required: true
       GITHUB_PAT:
+        type: string
         required: true
 
 jobs:
