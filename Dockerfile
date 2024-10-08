@@ -1,4 +1,4 @@
-FROM myoung34/github-runner:2.319.1-ubuntu-focal
+FROM myoung34/github-runner:2.320.0-ubuntu-focal
 
 # modify actions runner binaries to allow custom cache server implementation
 # https://gha-cache-server.falcondev.io/getting-started
