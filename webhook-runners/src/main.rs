@@ -8,12 +8,12 @@ use axum::{
     routing::post,
     Router,
 };
+use constant_time_eq::constant_time_eq;
 use hmac::{Hmac, Mac};
 use hyper::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use tracing::info;
-use constant_time_eq::constant_time_eq;
 
 #[tokio::main]
 async fn main() {
@@ -70,6 +70,8 @@ async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
+    info!("webhook received: {:?}", String::from_utf8_lossy(&body));
+
     let payload = serde_json::from_slice::<Payload>(&body).unwrap();
 
     let event = headers.get("X-GitHub-Event").unwrap();
@@ -87,27 +89,47 @@ async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
         .workflow_job
         .labels
         .contains(&"self-hosted".to_string())
-        && !payload
-            .workflow_job
-            .labels
-            .contains(&"playwright-chris-test".to_string())
     {
         return StatusCode::OK.into_response();
     }
+
+    if payload.workflow_job.labels.len() != 2 {
+        return StatusCode::OK.into_response();
+    }
+
+    let config_label = payload
+        .workflow_job
+        .labels
+        .iter()
+        .find(|label| label.starts_with("aws-ecs-"));
+    let config_label = if let Some(label) = config_label {
+        label
+    } else {
+        return StatusCode::OK.into_response();
+    };
+
+    let (cpu, memory, timeout) = match config_label.as_ref() {
+        "aws-ecs-0.25cpu-0.5mem-30m" => (256, 512, "30m"),
+        "aws-ecs-16cpu-64mem-30m" => (16384, 65536, "30m"),
+        _ => {
+            info!("invalid config label: {config_label}");
+            return StatusCode::OK.into_response();
+        }
+    };
 
     info!("handling webhook: {payload:?}");
 
     let pat = std::env::var("GITHUB_PAT").unwrap();
     let org = payload.repository.owner.login;
     let repo = payload.repository.name;
-    spawn_runner(&pat, &org, &repo, payload.workflow_job.labels).await;
+    spawn_runner(&pat, &org, &repo, payload.workflow_job.labels, cpu, memory, timeout).await;
 
     StatusCode::OK.into_response()
 }
 
-async fn spawn_runner(github_pat: &str, org: &str, repo: &str, labels: Vec<String>) {
+async fn spawn_runner(github_pat: &str, org: &str, repo: &str, labels: Vec<String>, cpu: i32, memory: i32, timeout: &str) {
     let token = get_runner_registration_token(github_pat, org, repo).await;
-    run_task(&token, org, repo, labels).await;
+    run_task(&token, org, repo, labels, cpu, memory, timeout).await;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -144,10 +166,11 @@ async fn get_runner_registration_token(github_pat: &str, org: &str, repo: &str) 
         .token
 }
 
-async fn run_task(runner_token: &str, org: &str, repo: &str, labels: Vec<String>) {
+async fn run_task(runner_token: &str, org: &str, repo: &str, labels: Vec<String>, cpu: i32, memory: i32, timeout: &str) {
     if labels.is_empty() {
         panic!("labels must not be empty");
     }
+    let labels = labels.join(",");
 
     let config = aws_config::defaults(BehaviorVersion::latest())
         .region(Region::new("eu-central-1"))
@@ -163,11 +186,6 @@ async fn run_task(runner_token: &str, org: &str, repo: &str, labels: Vec<String>
     // Auto-generated
     let repo_url = format!("https://github.com/{org}/{repo}");
 
-    // Customizable by repo. TODO parse from label
-    let cpu = 16384;
-    let memory = 65536;
-    let labels = labels.join(",");
-    let timeout = "30m";
 
     let result = client
         .run_task()
@@ -195,7 +213,7 @@ async fn run_task(runner_token: &str, org: &str, repo: &str, labels: Vec<String>
                         .environment(
                             KeyValuePair::builder()
                                 .name("RUNNER_NAME_PREFIX")
-                                .value(format!("aws-ecs-fargate-{cpu}cpu-{memory}mem"))
+                                .value(format!("aws-ecs-fargate-{cpu}cpu-{memory}mem-{timeout}"))
                                 .build(),
                         )
                         .environment(
