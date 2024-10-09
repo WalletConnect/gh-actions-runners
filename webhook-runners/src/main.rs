@@ -2,27 +2,54 @@ use aws_config::{BehaviorVersion, Region};
 use aws_sdk_ecs::types::{
     AwsVpcConfiguration, ContainerOverride, KeyValuePair, NetworkConfiguration, TaskOverride,
 };
-use axum::{
-    body::Bytes,
-    response::{IntoResponse, Response},
-    routing::post,
-    Router,
-};
 use constant_time_eq::constant_time_eq;
 use hmac::{Hmac, Mac};
-use hyper::{HeaderMap, StatusCode};
+use http::HeaderMap;
+use lambda_http::{
+    http::{Response, StatusCode},
+    run, service_fn, Body, Error, Request,
+};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::Sha256;
 use tracing::info;
 
 #[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt::init();
+async fn main() -> Result<(), Error> {
+    tracing_subscriber::fmt()
+        .without_time()
+        .with_max_level(tracing::Level::INFO)
+        .init();
 
-    let app = Router::new().route("/v1/webhook", post(handle_webhook));
+    run(service_fn(function_handler)).await
+}
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+fn build_response(status: StatusCode) -> Result<Response<String>, Error> {
+    Ok(Response::builder()
+        .status(status)
+        .header("Content-Type", "application/json")
+        .body(
+            json!({
+                "status": status.to_string(),
+            })
+            .to_string(),
+        )
+        .map_err(Box::new)?)
+}
+
+pub async fn function_handler(event: Request) -> Result<Response<String>, Error> {
+    if event.method() != "POST" {
+        return build_response(StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    if event.uri().path() != "/v1/webhook" {
+        return build_response(StatusCode::NOT_FOUND);
+    }
+
+    let (parts, body) = event.into_parts();
+    let headers = parts.headers;
+
+    handle_webhook(headers, body).await
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -53,7 +80,7 @@ struct Owner {
     login: String,
 }
 
-async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
+async fn handle_webhook(headers: HeaderMap, body: Body) -> Result<Response<String>, Error> {
     // https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
     let signature = headers
         .get("X-Hub-Signature-256")
@@ -67,7 +94,7 @@ async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
     mac.update(&body);
     let result = mac.finalize().into_bytes();
     if !constant_time_eq(&result[..], &signature[..]) {
-        return StatusCode::UNAUTHORIZED.into_response();
+        return build_response(StatusCode::UNAUTHORIZED);
     }
 
     info!("webhook received: {:?}", String::from_utf8_lossy(&body));
@@ -76,11 +103,11 @@ async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
 
     let event = headers.get("X-GitHub-Event").unwrap();
     if event != "workflow_job" {
-        return StatusCode::OK.into_response();
+        return build_response(StatusCode::OK);
     }
 
     if payload.action != "queued" {
-        return StatusCode::OK.into_response();
+        return build_response(StatusCode::OK);
     }
 
     let payload = serde_json::from_slice::<PayloadWithJob>(&body).unwrap();
@@ -90,11 +117,11 @@ async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
         .labels
         .contains(&"self-hosted".to_string())
     {
-        return StatusCode::OK.into_response();
+        return build_response(StatusCode::OK);
     }
 
     if payload.workflow_job.labels.len() != 2 {
-        return StatusCode::OK.into_response();
+        return build_response(StatusCode::OK);
     }
 
     let config_label = payload
@@ -105,7 +132,7 @@ async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
     let config_label = if let Some(label) = config_label {
         label
     } else {
-        return StatusCode::OK.into_response();
+        return build_response(StatusCode::OK);
     };
 
     let (cpu, memory, timeout) = match config_label.as_ref() {
@@ -113,7 +140,7 @@ async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
         "aws-ecs-16cpu-64mem-30m" => (16384, 65536, "30m"),
         _ => {
             info!("invalid config label: {config_label}");
-            return StatusCode::OK.into_response();
+            return build_response(StatusCode::OK);
         }
     };
 
@@ -122,12 +149,29 @@ async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
     let pat = std::env::var("GITHUB_PAT").unwrap();
     let org = payload.repository.owner.login;
     let repo = payload.repository.name;
-    spawn_runner(&pat, &org, &repo, payload.workflow_job.labels, cpu, memory, timeout).await;
+    spawn_runner(
+        &pat,
+        &org,
+        &repo,
+        payload.workflow_job.labels,
+        cpu,
+        memory,
+        timeout,
+    )
+    .await;
 
-    StatusCode::OK.into_response()
+    build_response(StatusCode::OK)
 }
 
-async fn spawn_runner(github_pat: &str, org: &str, repo: &str, labels: Vec<String>, cpu: i32, memory: i32, timeout: &str) {
+async fn spawn_runner(
+    github_pat: &str,
+    org: &str,
+    repo: &str,
+    labels: Vec<String>,
+    cpu: i32,
+    memory: i32,
+    timeout: &str,
+) {
     let token = get_runner_registration_token(github_pat, org, repo).await;
     run_task(&token, org, repo, labels, cpu, memory, timeout).await;
 }
@@ -166,7 +210,15 @@ async fn get_runner_registration_token(github_pat: &str, org: &str, repo: &str) 
         .token
 }
 
-async fn run_task(runner_token: &str, org: &str, repo: &str, labels: Vec<String>, cpu: i32, memory: i32, timeout: &str) {
+async fn run_task(
+    runner_token: &str,
+    org: &str,
+    repo: &str,
+    labels: Vec<String>,
+    cpu: i32,
+    memory: i32,
+    timeout: &str,
+) {
     if labels.is_empty() {
         panic!("labels must not be empty");
     }
@@ -185,7 +237,6 @@ async fn run_task(runner_token: &str, org: &str, repo: &str, labels: Vec<String>
 
     // Auto-generated
     let repo_url = format!("https://github.com/{org}/{repo}");
-
 
     let result = client
         .run_task()

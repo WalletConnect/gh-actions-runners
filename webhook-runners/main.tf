@@ -9,6 +9,13 @@ module "lambda" {
   timeout       = 10
   architectures = ["arm64"]
 
+  tracing_mode = "Active"
+
+  create_package             = false
+  publish                    = true
+  local_existing_package     = "./webhook-runners/target/lambda/webhook-runners/bootstrap.zip"
+  create_lambda_function_url = true
+
   environment_variables = {
     RUST_BACKTRACE        = 1,
     GITHUB_WEBHOOK_SECRET = var.github_webhook_secret,
@@ -17,14 +24,22 @@ module "lambda" {
     SUBNET_ID             = var.subnet_id,
   }
 
-  tracing_mode = "Active"
-
-  #   attach_policies    = true
-  #   number_of_policies = 1
-  #   policies           = ["arn:aws:iam::898587786287:policy/prod-relay-customer-metrics-data-api-access"]
-
-  create_package             = false
-  publish                    = true
-  local_existing_package     = "target/lambda/webhook-runners/bootstrap.zip"
-  create_lambda_function_url = true
+  attach_policy_statements = true
+  policy_statements = {
+    ecs_run_task = {
+      effect    = "Allow"
+      actions   = ["ecs:RunTask"]
+      Condition = {
+        "ArnEquals": {
+          "ecs:cluster": var.cluster_arn
+        }
+      }
+      resources = [var.task_definition_arn]
+    }
+    pass_role = {
+      effect    = "Allow"
+      actions   = ["iam:PassRole"]
+      resources = [var.iam_role_arn]
+    }
+  }
 }
