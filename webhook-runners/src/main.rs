@@ -3,13 +3,17 @@ use aws_sdk_ecs::types::{
     AwsVpcConfiguration, ContainerOverride, KeyValuePair, NetworkConfiguration, TaskOverride,
 };
 use axum::{
+    body::Bytes,
     response::{IntoResponse, Response},
     routing::post,
-    Json, Router,
+    Router,
 };
+use hmac::{Hmac, Mac};
 use hyper::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use tracing::info;
+use constant_time_eq::constant_time_eq;
 
 #[tokio::main]
 async fn main() {
@@ -23,6 +27,11 @@ async fn main() {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Payload {
+    action: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PayloadWithJob {
     action: String,
     workflow_job: WorkflowJob,
     repository: Repository,
@@ -44,10 +53,24 @@ struct Owner {
     login: String,
 }
 
-async fn handle_webhook(headers: HeaderMap, Json(payload): Json<Payload>) -> Response {
+async fn handle_webhook(headers: HeaderMap, body: Bytes) -> Response {
     // https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
-    let _signature = headers.get("X-Hub-Signature-256").unwrap();
-    // TODO validate signature
+    let signature = headers
+        .get("X-Hub-Signature-256")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let signature = signature.strip_prefix("sha256=").unwrap();
+    let signature = hex::decode(signature).unwrap();
+    let github_webhook_secret = std::env::var("GITHUB_WEBHOOK_SECRET").unwrap();
+    let mut mac = Hmac::<Sha256>::new_from_slice(github_webhook_secret.as_bytes()).unwrap();
+    mac.update(&body);
+    let result = mac.finalize().into_bytes();
+    if !constant_time_eq(&result[..], &signature[..]) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let payload = serde_json::from_slice::<Payload>(&body).unwrap();
 
     let event = headers.get("X-GitHub-Event").unwrap();
     if event != "workflow_job" {
@@ -57,6 +80,8 @@ async fn handle_webhook(headers: HeaderMap, Json(payload): Json<Payload>) -> Res
     if payload.action != "queued" {
         return StatusCode::OK.into_response();
     }
+
+    let payload = serde_json::from_slice::<PayloadWithJob>(&body).unwrap();
 
     if !payload
         .workflow_job
