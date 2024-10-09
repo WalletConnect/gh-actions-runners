@@ -2,37 +2,87 @@ use aws_config::{BehaviorVersion, Region};
 use aws_sdk_ecs::types::{
     AwsVpcConfiguration, ContainerOverride, KeyValuePair, NetworkConfiguration, TaskOverride,
 };
+use axum::{
+    response::{IntoResponse, Response},
+    routing::post,
+    Json, Router,
+};
+use hyper::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
-// use axum::Router;
-
-// #[tokio::main]
-// async fn main() {
-//     // initialize tracing
-//     tracing_subscriber::fmt::init();
-
-//     // build our application with a route
-//     let app = Router::new()
-//         // `GET /` goes to `root`
-//         .route("/", get(root))
-//         // `POST /users` goes to `create_user`
-//         .route("/users", post(create_user));
-
-//     // run our app with hyper, listening globally on port 3000
-//     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-//     axum::serve(listener, app).await.unwrap();
-// }
+use tracing::info;
 
 #[tokio::main]
 async fn main() {
-    let pat = std::env::var("GITHUB_PAT").unwrap();
-    let org = "reown-com";
-    let repo = "appkit";
-    spawn_runner(&pat, org, repo).await;
+    tracing_subscriber::fmt::init();
+
+    let app = Router::new().route("/v1/webhook", post(handle_webhook));
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
-async fn spawn_runner(github_pat: &str, org: &str, repo: &str) {
+#[derive(Debug, Serialize, Deserialize)]
+struct Payload {
+    action: String,
+    workflow_job: WorkflowJob,
+    repository: Repository,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct WorkflowJob {
+    labels: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Repository {
+    name: String,
+    owner: Owner,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Owner {
+    login: String,
+}
+
+async fn handle_webhook(headers: HeaderMap, Json(payload): Json<Payload>) -> Response {
+    // https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
+    let _signature = headers.get("X-Hub-Signature-256").unwrap();
+    // TODO validate signature
+
+    let event = headers.get("X-GitHub-Event").unwrap();
+    if event != "workflow_job" {
+        return StatusCode::OK.into_response();
+    }
+
+    if payload.action != "queued" {
+        return StatusCode::OK.into_response();
+    }
+
+    if !payload
+        .workflow_job
+        .labels
+        .contains(&"self-hosted".to_string())
+        && !payload
+            .workflow_job
+            .labels
+            .contains(&"playwright-chris-test".to_string())
+    {
+        return StatusCode::OK.into_response();
+    }
+
+    info!("handling webhook: {payload:?}");
+
+    let pat = std::env::var("GITHUB_PAT").unwrap();
+    let org = payload.repository.owner.login;
+    let repo = payload.repository.name;
+    spawn_runner(&pat, &org, &repo, payload.workflow_job.labels).await;
+
+    StatusCode::OK.into_response()
+}
+
+async fn spawn_runner(github_pat: &str, org: &str, repo: &str, labels: Vec<String>) {
     let token = get_runner_registration_token(github_pat, org, repo).await;
-    run_task(&token, org, repo).await;
+    run_task(&token, org, repo, labels).await;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,7 +119,11 @@ async fn get_runner_registration_token(github_pat: &str, org: &str, repo: &str) 
         .token
 }
 
-async fn run_task(runner_token: &str, org: &str, repo: &str) {
+async fn run_task(runner_token: &str, org: &str, repo: &str, labels: Vec<String>) {
+    if labels.is_empty() {
+        panic!("labels must not be empty");
+    }
+
     let config = aws_config::defaults(BehaviorVersion::latest())
         .region(Region::new("eu-central-1"))
         .load()
@@ -87,7 +141,7 @@ async fn run_task(runner_token: &str, org: &str, repo: &str) {
     // Customizable by repo. TODO parse from label
     let cpu = 16384;
     let memory = 65536;
-    let labels = "playwright-chris-test"; // TODO get from webhook
+    let labels = labels.join(",");
     let timeout = "30m";
 
     let result = client
@@ -157,5 +211,5 @@ async fn run_task(runner_token: &str, org: &str, repo: &str) {
         .send()
         .await
         .unwrap();
-    println!("result: {result:?}");
+    info!("spawned runner: {result:?}");
 }
