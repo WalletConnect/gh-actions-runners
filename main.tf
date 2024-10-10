@@ -137,3 +137,13 @@ module "setup-runners" {
   desired_count = var.desired_count
   timeout       = var.timeout
 }
+
+module "webhook-runners" {
+  source                = "./webhook-runners"
+  github_pat            = var.webhook_runners_github_pat
+  github_webhook_secret = var.webhook_runners_github_webhook_secret
+  cluster_arn           = module.runner.cluster_arn
+  task_definition_arn   = module.runner.task_definition_arn
+  subnet_id             = module.runner.subnet_id
+  iam_role_arn          = module.runner.iam_role_arn
+}
