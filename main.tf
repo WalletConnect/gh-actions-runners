@@ -139,11 +139,13 @@ module "setup-runners" {
 }
 
 module "webhook-runners" {
-  source                = "./webhook-runners"
-  github_pat            = var.webhook_runners_github_pat
-  github_webhook_secret = var.webhook_runners_github_webhook_secret
-  cluster_arn           = module.runner.cluster_arn
-  task_definition_arn   = module.runner.task_definition_arn
-  subnet_id             = module.runner.subnet_id
-  iam_role_arn          = module.runner.iam_role_arn
+  source                     = "./webhook-runners"
+  github_app_id              = var.webhook_runners_github_app_id
+  github_app_private_key     = var.webhook_runners_github_app_private_key
+  github_app_installation_id = var.webhook_runners_github_app_installation_id
+  github_webhook_secret      = var.webhook_runners_github_webhook_secret
+  cluster_arn                = module.runner.cluster_arn
+  task_definition_arn        = module.runner.task_definition_arn
+  subnet_id                  = module.runner.subnet_id
+  iam_role_arn               = module.runner.iam_role_arn
 }

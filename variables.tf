@@ -1,6 +1,16 @@
-variable "webhook_runners_github_pat" {
+variable "webhook_runners_github_app_id" {
+  type = number
+  description = "The ID of the GitHub App"
+}
+
+variable "webhook_runners_github_app_private_key" {
   type = string
-  description = "A GitHub PAT that's able to register runners on the repository. Should be admin access to the repo as described here:https://docs.github.com/en/rest/actions/self-hosted-runners?apiVersion=2022-11-28#create-a-registration-token-for-a-repository"
+  description = "The private key for the GitHub App. Should be in PEM format."
+}
+
+variable "webhook_runners_github_app_installation_id" {
+  type = string
+  description = "The installation ID of the GitHub App"
 }
 
 variable "webhook_runners_github_webhook_secret" {
