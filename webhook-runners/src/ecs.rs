@@ -7,7 +7,6 @@ use tracing::info;
 pub async fn spawn_runner(
     runner_token: &str,
     org: &str,
-    repo: &str,
     labels: Vec<String>,
     cpu: i32,
     memory: i32,
@@ -28,9 +27,6 @@ pub async fn spawn_runner(
     let cluster_arn = &std::env::var("CLUSTER_ARN").unwrap();
     let task_definition = "github-actions-runner";
     let subnet = &std::env::var("SUBNET_ID").unwrap();
-
-    // Auto-generated
-    let repo_url = format!("https://github.com/{org}/{repo}");
 
     let result = client
         .run_task()
@@ -69,8 +65,14 @@ pub async fn spawn_runner(
                         )
                         .environment(
                             KeyValuePair::builder()
-                                .name("REPO_URL")
-                                .value(repo_url)
+                                .name("RUNNER_SCOPE")
+                                .value("org")
+                                .build(),
+                        )
+                        .environment(
+                            KeyValuePair::builder()
+                                .name("ORG_NAME")
+                                .value(org)
                                 .build(),
                         )
                         .environment(KeyValuePair::builder().name("LABELS").value(labels).build())

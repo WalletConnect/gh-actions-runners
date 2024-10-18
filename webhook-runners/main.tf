@@ -17,21 +17,23 @@ module "lambda" {
   create_lambda_function_url = true
 
   environment_variables = {
-    RUST_BACKTRACE        = 1,
-    GITHUB_WEBHOOK_SECRET = var.github_webhook_secret,
-    GITHUB_PAT            = var.github_pat,
-    CLUSTER_ARN           = var.cluster_arn,
-    SUBNET_ID             = var.subnet_id,
+    RUST_BACKTRACE             = 1,
+    GITHUB_APP_ID              = var.github_app_id,
+    GITHUB_APP_PRIVATE_KEY     = var.github_app_private_key,
+    GITHUB_APP_INSTALLATION_ID = var.github_app_installation_id,
+    GITHUB_WEBHOOK_SECRET      = var.github_webhook_secret,
+    CLUSTER_ARN                = var.cluster_arn,
+    SUBNET_ID                  = var.subnet_id,
   }
 
   attach_policy_statements = true
   policy_statements = {
     ecs_run_task = {
-      effect    = "Allow"
-      actions   = ["ecs:RunTask"]
+      effect  = "Allow"
+      actions = ["ecs:RunTask"]
       Condition = {
-        "ArnEquals": {
-          "ecs:cluster": var.cluster_arn
+        "ArnEquals" : {
+          "ecs:cluster" : var.cluster_arn
         }
       }
       resources = [var.task_definition_arn]
