@@ -5,6 +5,7 @@ use constant_time_eq::constant_time_eq;
 use hmac::{Hmac, Mac};
 use http::{HeaderMap, StatusCode};
 use lambda_http::{Body, Error, Response};
+use octocrab::models::InstallationId;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use tracing::info;
@@ -103,15 +104,19 @@ pub async fn handle_webhook(headers: HeaderMap, body: Body) -> Result<Response<S
 
     info!("handling webhook: {payload:?}");
 
-    let pat = std::env::var("GITHUB_PAT").unwrap();
+    // TODO support multiple installations for different orgs
+    let installation_id = InstallationId::from(
+        std::env::var("GITHUB_APP_INSTALLATION_ID")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap(),
+    );
     let org = payload.repository.owner.login;
-    let repo = payload.repository.name;
 
-    let token = get_runner_registration_token(&pat, &org, &repo).await;
+    let token = get_runner_registration_token(installation_id, &org).await;
     spawn_runner(
         &token,
         &org,
-        &repo,
         payload.workflow_job.labels,
         cpu,
         memory,

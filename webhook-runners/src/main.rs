@@ -1,8 +1,10 @@
 use github::webhook::handle_webhook;
+use jsonwebtoken::EncodingKey;
 use lambda_http::{
     http::{Response, StatusCode},
     run, service_fn, Error, Request,
 };
+use octocrab::{models::AppId, Octocrab};
 use serde_json::json;
 
 pub mod ecs;
@@ -14,6 +16,18 @@ async fn main() -> Result<(), Error> {
         .without_time()
         .with_max_level(tracing::Level::INFO)
         .init();
+
+    let app_id = std::env::var("GITHUB_APP_ID").unwrap();
+    let private_key = std::env::var("GITHUB_APP_PRIVATE_KEY").unwrap();
+    octocrab::initialise(
+        Octocrab::builder()
+            .app(
+                AppId::from(app_id.parse::<u64>().unwrap()),
+                EncodingKey::from_rsa_pem(private_key.as_bytes()).unwrap(),
+            )
+            .build()
+            .unwrap(),
+    );
 
     run(service_fn(function_handler)).await
 }
