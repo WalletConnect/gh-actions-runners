@@ -1,6 +1,7 @@
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_ecs::types::{
-    AwsVpcConfiguration, ContainerOverride, KeyValuePair, NetworkConfiguration, TaskOverride,
+    AwsVpcConfiguration, ContainerOverride, EphemeralStorage, KeyValuePair, NetworkConfiguration,
+    TaskOverride,
 };
 use tracing::info;
 
@@ -10,6 +11,7 @@ pub async fn spawn_runner(
     labels: Vec<String>,
     cpu: i32,
     memory: i32,
+    disk: i32,
     timeout: &str,
 ) {
     if labels.is_empty() {
@@ -28,6 +30,16 @@ pub async fn spawn_runner(
     let task_definition = "github-actions-runner";
     let subnet = &std::env::var("SUBNET_ID").unwrap();
 
+    let task_override = TaskOverride::builder()
+        .cpu(cpu.to_string())
+        .memory(memory.to_string());
+    // Docs say min is 20, but it's actually 21
+    let task_override = if disk > 20 {
+        task_override.ephemeral_storage(EphemeralStorage::builder().size_in_gib(disk).build())
+    } else {
+        task_override
+    };
+
     let result = client
         .run_task()
         .cluster(cluster_arn)
@@ -43,9 +55,7 @@ pub async fn spawn_runner(
                 .build(),
         )
         .overrides(
-            TaskOverride::builder()
-                .cpu(cpu.to_string())
-                .memory(memory.to_string())
+            task_override
                 .container_overrides(
                     ContainerOverride::builder()
                         .name("github-actions-runner")
@@ -54,7 +64,9 @@ pub async fn spawn_runner(
                         .environment(
                             KeyValuePair::builder()
                                 .name("RUNNER_NAME_PREFIX")
-                                .value(format!("aws-ecs-fargate-{cpu}cpu-{memory}mem-{timeout}"))
+                                .value(format!(
+                                    "aws-ecs-fargate-{cpu}cpu-{memory}mem-{disk}disk-{timeout}"
+                                ))
                                 .build(),
                         )
                         .environment(
@@ -69,12 +81,7 @@ pub async fn spawn_runner(
                                 .value("org")
                                 .build(),
                         )
-                        .environment(
-                            KeyValuePair::builder()
-                                .name("ORG_NAME")
-                                .value(org)
-                                .build(),
-                        )
+                        .environment(KeyValuePair::builder().name("ORG_NAME").value(org).build())
                         .environment(KeyValuePair::builder().name("LABELS").value(labels).build())
                         .environment(
                             KeyValuePair::builder()
