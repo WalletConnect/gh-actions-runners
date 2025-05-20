@@ -93,9 +93,17 @@ pub async fn handle_webhook(headers: HeaderMap, body: Body) -> Result<Response<S
         return build_response(StatusCode::OK);
     };
 
-    let (cpu, memory, timeout) = match config_label.as_ref() {
-        "aws-ecs-0.25cpu-0.5mem-30m" => (256, 512, "30m"),
-        "aws-ecs-16cpu-64mem-30m" => (16384, 65536, "30m"),
+    let (cpu, memory, disk, timeout) = match config_label.as_ref() {
+        "aws-ecs-0.25cpu-0.5mem-30m" => (256, 512, 20, "30m"),
+        "aws-ecs-16cpu-64mem-30m" => (16384, 65536, 20, "30m"),
+        "aws-ecs-16cpu-64mem-20disk-30m" => (16384, 65536, 20, "30m"),
+        "aws-ecs-16cpu-64mem-30disk-30m" => (16384, 65536, 30, "30m"),
+        "aws-ecs-16cpu-64mem-40disk-30m" => (16384, 65536, 40, "30m"),
+        "aws-ecs-16cpu-32mem-20disk-30m" => (16384, 32768, 20, "30m"),
+        "aws-ecs-16cpu-24mem-20disk-30m" => (16384, 24576, 20, "30m"),
+        "aws-ecs-16cpu-16mem-20disk-30m" => (16384, 16384, 20, "30m"),
+        "aws-ecs-12cpu-8mem-20disk-30m" => (12288, 8192, 20, "30m"),
+        "aws-ecs-8cpu-8mem-20disk-30m" => (8192, 8192, 20, "30m"),
         _ => {
             info!("invalid config label: {config_label}");
             return build_response(StatusCode::OK);
@@ -120,6 +128,7 @@ pub async fn handle_webhook(headers: HeaderMap, body: Body) -> Result<Response<S
         payload.workflow_job.labels,
         cpu,
         memory,
+        disk,
         timeout,
     )
     .await;
