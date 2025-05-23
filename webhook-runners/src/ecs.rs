@@ -1,6 +1,6 @@
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_ecs::types::{
-    AwsVpcConfiguration, ContainerOverride, KeyValuePair, NetworkConfiguration, TaskOverride,
+    AwsVpcConfiguration, ContainerOverride, EphemeralStorage, KeyValuePair, NetworkConfiguration, TaskOverride
 };
 use tracing::info;
 
@@ -10,6 +10,7 @@ pub async fn spawn_runner(
     labels: Vec<String>,
     cpu: i32,
     memory: i32,
+    disk: i32,
     timeout: &str,
 ) {
     if labels.is_empty() {
@@ -46,6 +47,11 @@ pub async fn spawn_runner(
             TaskOverride::builder()
                 .cpu(cpu.to_string())
                 .memory(memory.to_string())
+                .ephemeral_storage(
+                    EphemeralStorage::builder()
+                        .size_in_gib(disk)
+                        .build(),
+                )
                 .container_overrides(
                     ContainerOverride::builder()
                         .name("github-actions-runner")
@@ -54,7 +60,7 @@ pub async fn spawn_runner(
                         .environment(
                             KeyValuePair::builder()
                                 .name("RUNNER_NAME_PREFIX")
-                                .value(format!("aws-ecs-fargate-{cpu}cpu-{memory}mem-{timeout}"))
+                                .value(format!("aws-ecs-fargate-{cpu}cpu-{memory}mem-{disk}disk-{timeout}"))
                                 .build(),
                         )
                         .environment(
