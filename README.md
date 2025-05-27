@@ -1,6 +1,16 @@
 ## Deploying webhook runners
 
 ```bash
+cargo install cargo-lambda
+```
+
+```bash
+terraform login
+terraform init
+```
+
+```bash
+cd webhook-runners/
 cargo lambda build --release --arm64 --output-format zip
 ```
 
