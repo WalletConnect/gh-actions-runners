@@ -10,12 +10,12 @@ struct RegistrationTokenResponse {
 pub async fn get_runner_registration_token(installation_id: InstallationId, org: &str) -> String {
     let response = octocrab::instance()
         .installation(installation_id)
-        .unwrap()
+        .expect("failed to create octocrab instance")
         .post::<_, RegistrationTokenResponse>(
             format!("/orgs/{org}/actions/runners/registration-token"),
             None::<&()>,
         )
         .await
-        .unwrap();
+        .expect("failed to get runner registration token");
     response.token
 }

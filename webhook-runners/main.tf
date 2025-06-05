@@ -38,6 +38,11 @@ module "lambda" {
       }
       resources = [var.task_definition_arn]
     }
+    ecs_tag_resource = {
+      effect    = "Allow"
+      actions   = ["ecs:TagResource"]
+      resources = ["arn:aws:ecs:eu-central-1:*:task/github-actions-runner/*"]
+    }
     pass_role = {
       effect    = "Allow"
       actions   = ["iam:PassRole"]
