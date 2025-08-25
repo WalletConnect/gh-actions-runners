@@ -1,0 +1,100 @@
+name: Bump runners image version
+
+on:
+  schedule:
+    - cron: "0 12 * * 1-5"  # weekdays at 12:00 UTC (GitHub cron uses UTC)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PR_REVIEWERS: "geekbrother,nopestack,chris13524"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find latest ubuntu-noble tag on Docker Hub
+        id: latest
+        run: |
+          set -euo pipefail
+
+          # Collect all tags from Docker Hub (paginate until there's no "next")
+          url="https://hub.docker.com/v2/repositories/myoung34/github-runner/tags?page_size=100"
+          all_tags=""
+          while [ -n "$url" ]; do
+            json="$(curl -fsSL "$url")"
+            # append tags (one per line)
+            all_tags="$(printf "%s\n%s" "$all_tags" "$(printf "%s" "$json" | jq -r '.results[].name')")"
+            url="$(printf "%s" "$json" | jq -r '.next // empty')"
+          done
+
+          # Keep only tags like 1.2.3-ubuntu-noble, strip suffix, sort semver, pick latest
+          latest_semver="$(printf "%s\n" "$all_tags" \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+-ubuntu-noble$' \
+            | sed -E 's/-ubuntu-noble$//' \
+            | sort -V \
+            | tail -n1)"
+
+          if [ -z "${latest_semver:-}" ]; then
+            echo "No ubuntu-noble tags found." >&2
+            exit 1
+          fi
+
+          latest_tag="${latest_semver}-ubuntu-noble"
+          echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+          echo "Latest tag: $latest_tag"
+
+      - name: Read current tag from Dockerfile
+        id: current
+        run: |
+          set -euo pipefail
+          if ! grep -qE '^FROM[[:space:]]+myoung34/github-runner:' Dockerfile; then
+            echo "Could not find FROM myoung34/github-runner in Dockerfile" >&2
+            exit 1
+          fi
+          current_tag="$(grep -Eo '^FROM[[:space:]]+myoung34/github-runner:[^[:space:]]+' Dockerfile | head -n1 | cut -d: -f2)"
+          echo "current_tag=$current_tag" >> "$GITHUB_OUTPUT"
+          echo "Current tag: $current_tag"
+
+      - name: Update Dockerfile if needed
+        id: bump
+        run: |
+          set -euo pipefail
+          latest="${{ steps.latest.outputs.latest_tag }}"
+          current="${{ steps.current.outputs.current_tag }}"
+
+          if [ "$latest" = "$current" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No change needed."
+            exit 0
+          fi
+
+          # In-place update of the FROM line
+          sed -i -E "s|^FROM[[:space:]]+myoung34/github-runner:[^[:space:]]+|FROM myoung34/github-runner:${latest}|" Dockerfile
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "Bumped Dockerfile FROM to ${latest}"
+
+      - name: Create pull request
+        if: steps.bump.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(docker): bump base image to ${{ steps.latest.outputs.latest_tag }}"
+          title: "chore(docker): bump base image to ${{ steps.latest.outputs.latest_tag }}"
+          body: |
+            This PR updates the base image in `Dockerfile`.
+
+            **Before:** `myoung34/github-runner:${{ steps.current.outputs.current_tag }}`
+            **After:**  `myoung34/github-runner:${{ steps.latest.outputs.latest_tag }}`
+
+            Triggered by scheduled workflow.
+          branch: "chore/bump-github-runner-${{ steps.latest.outputs.latest_tag }}"
+          delete-branch: true
+          reviewers: ${{ env.PR_REVIEWERS }}
