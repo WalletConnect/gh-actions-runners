@@ -1,6 +1,7 @@
 use crate::{
     build_response, ecs::spawn_runner, github::runner_registration::get_runner_registration_token,
 };
+use anyhow::Context;
 use constant_time_eq::constant_time_eq;
 use hmac::{Hmac, Mac};
 use http::{HeaderMap, StatusCode};
@@ -39,23 +40,20 @@ struct Owner {
     login: String,
 }
 
-pub async fn handle_webhook(
-    headers: HeaderMap,
-    body: Body,
-) -> Result<Response<String>, anyhow::Error> {
+pub async fn handle_webhook(headers: HeaderMap, body: Body) -> anyhow::Result<Response<String>> {
     // https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
     let signature = headers
         .get("X-Hub-Signature-256")
-        .ok_or(anyhow::anyhow!("missing X-Hub-Signature-256 header"))?
+        .ok_or_else(|| anyhow::anyhow!("missing X-Hub-Signature-256 header"))?
         .to_str()?;
     let signature = signature
         .strip_prefix("sha256=")
-        .ok_or(anyhow::anyhow!("invalid signature: missing prefix"))?;
+        .ok_or_else(|| anyhow::anyhow!("invalid signature: missing prefix"))?;
     let signature = hex::decode(signature).map_err(|_| anyhow::anyhow!("invalid signature"))?;
-    let github_webhook_secret = std::env::var("GITHUB_WEBHOOK_SECRET")
-        .map_err(|e| anyhow::anyhow!("missing GITHUB_WEBHOOK_SECRET: {e}"))?;
+    let github_webhook_secret =
+        std::env::var("GITHUB_WEBHOOK_SECRET").context("missing GITHUB_WEBHOOK_SECRET")?;
     let mut mac = Hmac::<Sha256>::new_from_slice(github_webhook_secret.as_bytes())
-        .map_err(|e| anyhow::anyhow!("failed to create HMAC: {e}"))?;
+        .context("failed to create HMAC")?;
     mac.update(&body);
     let result = mac.finalize().into_bytes();
     if !constant_time_eq(&result[..], &signature[..]) {
@@ -70,7 +68,7 @@ pub async fn handle_webhook(
 
     let event = headers
         .get("X-GitHub-Event")
-        .ok_or(anyhow::anyhow!("missing X-GitHub-Event header"))?;
+        .ok_or_else(|| anyhow::anyhow!("missing X-GitHub-Event header"))?;
     if event != "workflow_job" {
         return Ok(build_response(StatusCode::OK)
             .map_err(|e| anyhow::anyhow!("failed to build response: {e}"))?);
