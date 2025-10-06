@@ -6,6 +6,7 @@ use lambda_http::{
 };
 use octocrab::{models::AppId, Octocrab};
 use serde_json::json;
+use tracing::error;
 
 pub mod ecs;
 pub mod github;
@@ -57,5 +58,11 @@ pub async fn function_handler(event: Request) -> Result<Response<String>, Error>
     let (parts, body) = event.into_parts();
     let headers = parts.headers;
 
-    handle_webhook(headers, body).await
+    match handle_webhook(headers, body).await {
+        Ok(response) => Ok(response),
+        Err(e) => {
+            error!("error handling webhook: {e:?}");
+            build_response(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }

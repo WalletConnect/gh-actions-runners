@@ -1,7 +1,7 @@
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_ecs::types::{
     AwsVpcConfiguration, ContainerOverride, EphemeralStorage, KeyValuePair, NetworkConfiguration,
-    TaskOverride,
+    Tag, TaskOverride,
 };
 use tracing::info;
 
@@ -13,9 +13,11 @@ pub async fn spawn_runner(
     memory: i32,
     disk: i32,
     timeout: &str,
-) {
+    repository: String,
+    job_url: String,
+) -> Result<(), anyhow::Error> {
     if labels.is_empty() {
-        panic!("labels must not be empty");
+        return Err(anyhow::anyhow!("labels must not be empty"));
     }
     let labels = labels.join(",");
 
@@ -26,9 +28,11 @@ pub async fn spawn_runner(
     let client = aws_sdk_ecs::Client::new(&config);
 
     // TF config
-    let cluster_arn = &std::env::var("CLUSTER_ARN").unwrap();
+    let cluster_arn =
+        &std::env::var("CLUSTER_ARN").map_err(|e| anyhow::anyhow!("missing CLUSTER_ARN: {e}"))?;
     let task_definition = "github-actions-runner";
-    let subnet = &std::env::var("SUBNET_ID").unwrap();
+    let subnet =
+        &std::env::var("SUBNET_ID").map_err(|e| anyhow::anyhow!("missing SUBNET_ID: {e}"))?;
 
     let task_override = TaskOverride::builder()
         .cpu(cpu.to_string())
@@ -44,13 +48,18 @@ pub async fn spawn_runner(
         .run_task()
         .cluster(cluster_arn)
         .task_definition(task_definition)
+        .tags(Tag::builder().key("Repository").value(repository).build())
+        .tags(Tag::builder().key("Size").value(format!("{cpu}cpu-{memory}mem-{disk}disk-{timeout}")).build())
+        .tags(Tag::builder().key("Job").value(job_url).build())
         .network_configuration(
             NetworkConfiguration::builder()
                 .awsvpc_configuration(
                     AwsVpcConfiguration::builder()
                         .subnets(subnet)
                         .build()
-                        .unwrap(),
+                        .map_err(|e| {
+                            anyhow::anyhow!("failed to build network configuration: {e}")
+                        })?,
                 )
                 .build(),
         )
@@ -107,6 +116,12 @@ pub async fn spawn_runner(
         )
         .send()
         .await
-        .unwrap();
+        .map_err(|e| anyhow::anyhow!("failed to spawn runner: {e:?}"))?;
+
+    for failure in result.failures() {
+        info!("failure: {failure:?}");
+    }
+
     info!("spawned runner: {result:?}");
+    Ok(())
 }
