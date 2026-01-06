@@ -9,6 +9,7 @@ use lambda_http::{Body, Response};
 use octocrab::models::InstallationId;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use std::collections::HashMap;
 use tracing::info;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -132,17 +133,20 @@ pub async fn handle_webhook(headers: HeaderMap, body: Body) -> anyhow::Result<Re
 
     info!("handling webhook: {payload:?}");
 
-    // TODO support multiple installations for different orgs
-    let installation_id = InstallationId::from(
-        std::env::var("GITHUB_APP_INSTALLATION_ID")
-            .expect("missing GITHUB_APP_INSTALLATION_ID")
-            .parse::<u64>()
-            .expect("failed to parse GITHUB_APP_INSTALLATION_ID"),
-    );
-
     let org = payload.repository.owner.login;
     let repo = payload.repository.name;
     let job_url = payload.workflow_job.html_url;
+
+    // Look up installation ID for this organization
+    let installations_json = std::env::var("GITHUB_INSTALLATIONS")
+        .context("missing GITHUB_INSTALLATIONS environment variable")?;
+    let installations: HashMap<String, u64> = serde_json::from_str(&installations_json)
+        .context("failed to parse GITHUB_INSTALLATIONS as JSON")?;
+
+    let installation_id = installations
+        .get(&org)
+        .ok_or_else(|| anyhow::anyhow!("no installation ID configured for organization: {org}"))?;
+    let installation_id = InstallationId::from(*installation_id);
 
     let token = get_runner_registration_token(installation_id, &org).await;
 
