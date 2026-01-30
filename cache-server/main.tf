@@ -87,6 +87,11 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_write_policy" {
 
 resource "aws_ecs_cluster" "this" {
   name = local.name
+
+  tags = {
+    Application = "github-runners"
+    Service     = "ecs"
+  }
 }
 
 resource "aws_ecs_cluster_capacity_providers" "this" {
@@ -103,6 +108,11 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
 resource "aws_cloudwatch_log_group" "this" {
   name              = "${local.name}-logs"
   retention_in_days = 1
+
+  tags = {
+    Application = "github-runners"
+    Service     = "cloudwatch"
+  }
 }
 
 resource "aws_ecs_task_definition" "this" {
@@ -230,6 +240,11 @@ resource "aws_iam_access_key" "this" {
 resource "aws_s3_bucket" "this" {
   bucket_prefix = "github-actions-cache"
   force_destroy = "true"
+
+  tags = {
+    Application = "github-runners"
+    Service     = "s3"
+  }
 }
 
 resource "aws_s3_bucket_policy" "this" {

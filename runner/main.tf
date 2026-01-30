@@ -42,6 +42,11 @@ resource "aws_route" "nat_gateway" {
 resource "aws_ecr_repository" "this" {
   name         = local.name
   force_delete = true
+
+  tags = {
+    Application = "github-runners"
+    Service     = "ecr"
+  }
 }
 
 data "aws_iam_policy_document" "assume_role" {
@@ -72,6 +77,11 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_write_policy" {
 
 resource "aws_ecs_cluster" "this" {
   name = local.name
+
+  tags = {
+    Application = "github-runners"
+    Service     = "ecs"
+  }
 }
 
 resource "aws_ecs_cluster_capacity_providers" "this" {
@@ -87,6 +97,11 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
 resource "aws_cloudwatch_log_group" "this" {
   name              = "${local.name}-logs"
   retention_in_days = 1
+
+  tags = {
+    Application = "github-runners"
+    Service     = "cloudwatch"
+  }
 }
 
 resource "aws_ecs_task_definition" "this" {
