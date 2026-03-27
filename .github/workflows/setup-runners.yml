@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Generate runner token
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         id: gen-token
         with:
           github-token: ${{ secrets.GITHUB_PAT }}
@@ -46,17 +46,17 @@ jobs:
             return response.data.token;   
 
       - name: Checkout WalletConnect/gh-actions-runners
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: WalletConnect/gh-actions-runners
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Cache Terraform data
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .terraform
           key: terraform-${{ hashFiles('.terraform.lock.hcl') }}
