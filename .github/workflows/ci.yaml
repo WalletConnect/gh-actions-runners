@@ -28,7 +28,7 @@ jobs:
           - name: github-actions-runner
             dockerfile: ./Dockerfile
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Configure AWS Credentials
