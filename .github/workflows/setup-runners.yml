@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Generate runner token
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         id: gen-token
         with:
           github-token: ${{ secrets.GITHUB_PAT }}
@@ -46,7 +46,7 @@ jobs:
             return response.data.token;   
 
       - name: Checkout WalletConnect/gh-actions-runners
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: WalletConnect/gh-actions-runners
 
