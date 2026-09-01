@@ -1,9 +1,0 @@
-# The Dockerfile has no COPY/ADD, so nothing here is needed in the build.
-# This only trims what buildx ships to the builder as context.
-.git
-.github
-**/target
-**/.terraform
-*.tfstate*
-webhook-runners
-*.md
