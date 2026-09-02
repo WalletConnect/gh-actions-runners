@@ -3,7 +3,7 @@ use crate::{
 };
 use anyhow::Context;
 use constant_time_eq::constant_time_eq;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use http::{HeaderMap, StatusCode};
 use lambda_http::{Body, Response};
 use octocrab::models::InstallationId;
@@ -191,6 +191,27 @@ fn parse_config_label(config_label: &str) -> Result<(u32, u32, u32, u32), ()> {
 #[cfg(test)]
 mod tests {
     use {super::*, std::collections::HashMap};
+
+    /// RFC 4231 test case 2. Guards the hmac 0.12->0.13 / sha2 0.10->0.11 bump:
+    /// this is the exact primitive `handle_webhook` uses to authenticate GitHub
+    /// deliveries, so a behavior change here would silently reject every webhook.
+    #[test]
+    fn test_hmac_sha256_known_answer() {
+        let mut mac = Hmac::<Sha256>::new_from_slice(b"Jefe").unwrap();
+        mac.update(b"what do ya want for nothing?");
+        assert_eq!(
+            hex::encode(mac.finalize().into_bytes()),
+            "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+        );
+    }
+
+    /// The signature comparison must stay constant-time and length-sensitive.
+    #[test]
+    fn test_constant_time_eq_semantics() {
+        assert!(constant_time_eq(b"abcd", b"abcd"));
+        assert!(!constant_time_eq(b"abcd", b"abce"));
+        assert!(!constant_time_eq(b"abcd", b"abc"));
+    }
 
     #[test]
     fn test_parse_config_label_valid() {
