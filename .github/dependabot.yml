@@ -2,7 +2,9 @@ version: 2
 
 updates:
   - package-ecosystem: "cargo"
-    directory: "/"
+    # The only Rust crate lives here; "/" has no Cargo.toml, so Dependabot was
+    # silently scanning nothing and security updates never opened PRs.
+    directory: "/webhook-runners"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -41,7 +43,14 @@ updates:
       - "docker"
 
   - package-ecosystem: "terraform"
-    directory: "/terraform"
+    # There is no /terraform directory; the modules are at the root and in
+    # these subdirectories.
+    directories:
+      - "/"
+      - "/cache-server"
+      - "/runner"
+      - "/setup-runners"
+      - "/webhook-runners"
     schedule:
       interval: "weekly"
       day: "monday"
