@@ -1,0 +1,55 @@
+name: rust
+
+on:
+  pull_request:
+    paths:
+      - "webhook-runners/**"
+      - ".github/workflows/rust.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "webhook-runners/**"
+      - ".github/workflows/rust.yml"
+  workflow_dispatch:
+
+# Least privilege for GITHUB_TOKEN: this workflow only reads the repo in order
+# to build and test. Nothing here publishes or writes back.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: webhook-runners
+
+jobs:
+  check:
+    name: build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache cargo build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: webhook-runners
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      # --locked makes cargo use Cargo.lock exactly as committed and fail if it
+      # is stale or inconsistent with Cargo.toml, so a dependency bump has to
+      # both resolve and compile before it can merge.
+      - name: Build
+        run: cargo build --locked --all-targets
+
+      - name: Test
+        run: cargo test --locked

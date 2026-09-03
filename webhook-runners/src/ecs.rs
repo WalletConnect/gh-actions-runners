@@ -49,7 +49,12 @@ pub async fn spawn_runner(
         .cluster(cluster_arn)
         .task_definition(task_definition)
         .tags(Tag::builder().key("Repository").value(repository).build())
-        .tags(Tag::builder().key("Size").value(format!("{cpu}cpu-{memory}mem-{disk}disk-{timeout}")).build())
+        .tags(
+            Tag::builder()
+                .key("Size")
+                .value(format!("{cpu}cpu-{memory}mem-{disk}disk-{timeout}"))
+                .build(),
+        )
         .tags(Tag::builder().key("Job").value(job_url).build())
         .network_configuration(
             NetworkConfiguration::builder()
