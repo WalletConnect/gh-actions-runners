@@ -6,6 +6,14 @@ on:
       - "Dockerfile"
   workflow_dispatch:
 
+# Least privilege for GITHUB_TOKEN, applied to every job in this workflow.
+# `contents: read` is all that is needed: only the build job touches the repo
+# (actions/checkout). AWS auth uses static key secrets rather than OIDC, so no
+# `id-token: write`, and the artifact and type=gha cache steps authenticate with
+# ACTIONS_RUNTIME_TOKEN rather than GITHUB_TOKEN.
+permissions:
+  contents: read
+
 concurrency:
   # Support push/pr as event types with different behaviors each:
   # 1. push: queue up builds
