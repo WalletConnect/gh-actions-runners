@@ -89,13 +89,20 @@ mod jwt_backend_tests {
         let key = EncodingKey::from_rsa_pem(&pem).expect("from_rsa_pem");
         let token = encode(
             &Header::new(Algorithm::RS256),
-            &Claims { iss: "12345".into(), iat: 1_700_000_000, exp: 1_700_000_600 },
+            &Claims {
+                iss: "12345".into(),
+                iat: 1_700_000_000,
+                exp: 1_700_000_600,
+            },
             &key,
         )
         .expect("RS256 encode");
 
         assert_eq!(token.matches('.').count(), 2, "expected 3 JWT segments");
-        assert!(!token.split('.').nth(2).unwrap().is_empty(), "empty signature");
+        assert!(
+            !token.split('.').nth(2).unwrap().is_empty(),
+            "empty signature"
+        );
         println!("signed JWT ok, {} bytes", token.len());
     }
 }
