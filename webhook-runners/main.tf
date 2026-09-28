@@ -1,6 +1,6 @@
 module "lambda" {
   source  = "terraform-aws-modules/lambda/aws"
-  version = "8.8.0"
+  version = "8.9.0"
 
   function_name = "webhook-runners"
   description   = "Function to spawn ECS runners from GitHub webhooks"
